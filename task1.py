@@ -1,128 +1,119 @@
-# classifier_comparison_interactive.py
-import plotly.graph_objects as go
-import plotly.subplots as sp
-from plotly.colors import qualitative
+# task1.py
 import numpy as np
-from sklearn.datasets import make_classification
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
 
-def create_interactive_visualization():
-    """创建交互式分类器比较可视化"""
-    
-    # 创建数据集
-    X, y = make_classification(
-        n_samples=300, n_features=2, n_informative=2, n_redundant=0,
-        n_clusters_per_class=1, flip_y=0.1, random_state=42
-    )
-    
-    # 定义分类器
-    classifiers = {
-        'Logistic Regression': LogisticRegression(),
-        'Decision Tree': DecisionTreeClassifier(max_depth=5),
-        'Random Forest': RandomForestClassifier(n_estimators=100),
-        'SVM (RBF)': SVC(kernel='rbf', probability=True),
-        'k-NN': KNeighborsClassifier(n_neighbors=5)
-    }
-    
-    # 创建网格
-    x_min, x_max = X[:, 0].min() - 1, X[:, 0].max() + 1
-    y_min, y_max = X[:, 1].min() - 1, X[:, 1].max() + 1
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, 0.1),
-                         np.arange(y_min, y_max, 0.1))
-    
-    # 创建子图
-    fig = sp.make_subplots(
-        rows=2, cols=3,
-        subplot_titles=list(classifiers.keys()) + ['Comparison'],
-        specs=[[{'type': 'heatmap'}, {'type': 'heatmap'}, {'type': 'heatmap'}],
-               [{'type': 'heatmap'}, {'type': 'heatmap'}, {'type': 'bar'}]]
-    )
-    
-    accuracies = []
-    
-    # 训练每个分类器并创建热图
-    for i, (name, clf) in enumerate(classifiers.items()):
-        clf.fit(X, y)
-        
-        # 预测每个网格点
-        Z = clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
-        Z = Z.reshape(xx.shape)
-        
-        # 计算准确率
-        accuracy = clf.score(X, y)
-        accuracies.append(accuracy)
-        
-        # 添加决策边界热图
-        row = i // 3 + 1
-        col = i % 3 + 1
-        
-        fig.add_trace(
-            go.Heatmap(
-                x=xx[0, :],
-                y=yy[:, 0],
-                z=Z,
-                colorscale='RdBu',
-                showscale=False,
-                hoverinfo='none'
-            ),
-            row=row, col=col
-        )
-        
-        # 添加数据点
-        fig.add_trace(
-            go.Scatter(
-                x=X[:, 0],
-                y=X[:, 1],
-                mode='markers',
-                marker=dict(
-                    color=y,
-                    colorscale=[[0, 'red'], [1, 'blue']],
-                    size=8,
-                    line=dict(width=1, color='black')
-                ),
-                showlegend=False,
-                hoverinfo='skip'
-            ),
-            row=row, col=col
-        )
-        
-        # 更新子图布局
-        fig.update_xaxes(title_text="Feature 1", row=row, col=col)
-        fig.update_yaxes(title_text="Feature 2", row=row, col=col)
-        fig.layout.annotations[i].text = f"{name}<br>Accuracy: {accuracy:.3f}"
-    
-    # 添加准确率比较条形图
-    fig.add_trace(
-        go.Bar(
-            x=list(classifiers.keys()),
-            y=accuracies,
-            marker_color=qualitative.Plotly[:len(accuracies)],
-            text=[f'{acc:.3f}' for acc in accuracies],
-            textposition='auto'
-        ),
-        row=2, col=3
-    )
-    
-    fig.update_xaxes(title_text="Classifier", row=2, col=3)
-    fig.update_yaxes(title_text="Accuracy", row=2, col=3)
-    fig.layout.annotations[-1].text = "Classifier Accuracy Comparison"
-    
-    # 更新布局
-    fig.update_layout(
-        title_text="Interactive Classifier Comparison",
-        height=800,
-        showlegend=False
-    )
-    
-    return fig
+# 数据加载
+iris = load_iris()
+X = iris.data[:, 2:]  # petal length & petal width
+y = iris.target
+species = ['setosa', 'versicolor', 'virginica']
 
-# 运行交互式可视化
-if __name__ == "__main__":
-    fig = create_interactive_visualization()
-    fig.write_html("task1.html")
-    print("交互式可视化已保存为 task1.html")
-    fig.show()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# 分类器
+classifiers = {
+    'Logistic Regression': LogisticRegression(max_iter=200, multi_class='multinomial', random_state=42),
+    'Linear SVM': SVC(kernel='linear', probability=True, random_state=42),
+    'Decision Tree (depth=5)': DecisionTreeClassifier(max_depth=5, random_state=42)
+}
+
+# 高分辨率网格
+x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
+y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
+xx, yy = np.meshgrid(np.linspace(x_min, x_max, 500),
+                     np.linspace(y_min, y_max, 500))
+grid = np.c_[xx.ravel(), yy.ravel()]
+
+# 专业颜色
+class_colors = ['#2166ac', '#fdae61', '#5aae61']  # 深蓝, 橙, 绿 (colorblind-safe, 科研常用)
+
+# specs: 每行 5 列 (决策 + 3概率 + Max Class)
+row_spec = [{"type": "xy"}, {"type": "contour"}, {"type": "contour"}, {"type": "contour"}, {"type": "xy"}]
+specs = [row_spec.copy() for _ in range(3)]
+
+# 子图标题
+subplot_titles = []
+for name in classifiers:
+    subplot_titles += [f"{name}<br>Decision Regions", "P(setosa)", "P(versicolor)", "P(virginica)", "Max Class"]
+
+fig = make_subplots(rows=3, cols=5,
+                    subplot_titles=subplot_titles,
+                    specs=specs,
+                    horizontal_spacing=0.05,
+                    vertical_spacing=0.12)
+
+row = 1
+for name, clf in classifiers.items():
+    clf.fit(X_train, y_train)
+    Z = clf.predict(grid).reshape(xx.shape)  # 硬决策
+    has_proba = hasattr(clf, "predict_proba")
+    if has_proba:
+        probs = clf.predict_proba(grid).reshape((500, 500, 3))
+
+    # 左侧: Decision Regions + 数据点
+    for c in range(3):
+        fig.add_trace(go.Scatter(x=X[y==c,0], y=X[y==c,1], mode='markers',
+                                 marker=dict(color=class_colors[c], size=10, line=dict(width=2, color='black')),
+                                 name=species[c], showlegend=(row==1)), row=row, col=1)
+    fig.add_trace(go.Contour(z=Z, x=np.linspace(x_min, x_max, 500), y=np.linspace(y_min, y_max, 500),
+                             colorscale=[[0,class_colors[0]], [0.5,class_colors[1]], [1,class_colors[2]]],
+                             opacity=0.4, showscale=False, contours_coloring='fill', line_width=0),
+                  row=row, col=1)
+
+    # 中间3列: 每类概率热图 (白 → 该类颜色)
+    if has_proba:
+        for c in range(3):
+            col_idx = c + 2
+            cmap = [[0, 'white'], [1, class_colors[c]]]
+            fig.add_trace(go.Contour(z=probs[:,:,c], x=np.linspace(x_min, x_max, 500), y=np.linspace(y_min, y_max, 500),
+                                     colorscale=cmap, contours=dict(coloring='fill', showlabels=False),
+                                     showscale=(row==1 and col_idx==4),  # 只在第一行最右概率显示colorbar
+                                     colorbar=dict(title="Probability", thickness=12, len=0.6, x=1.02 if col_idx==4 else None)),
+                          row=row, col=col_idx)
+    else:
+        for c in range(3):
+            col_idx = c + 2
+            fig.add_annotation(text="No probability<br>estimates", x=0.5, y=0.5, xref="x domain", yref="y domain",
+                               showarrow=False, font=dict(size=15, color="gray"), row=row, col=col_idx)
+
+    # 右侧: Max Class (等同于硬决策区域)
+    for c in range(3):
+        fig.add_trace(go.Scatter(x=X[y==c,0], y=X[y==c,1], mode='markers',
+                                 marker=dict(color=class_colors[c], size=10, line=dict(width=2, color='black')),
+                                 showlegend=False), row=row, col=5)
+    fig.add_trace(go.Contour(z=Z, x=np.linspace(x_min, x_max, 500), y=np.linspace(y_min, y_max, 500),
+                             colorscale=[[0,class_colors[0]], [0.5,class_colors[1]], [1,class_colors[2]]],
+                             opacity=0.5, showscale=False, contours_coloring='fill', line_width=2),
+                  row=row, col=5)
+
+    row += 1
+
+# 科研级美化布局
+fig.update_layout(
+    height=1100, width=1800,
+    title_text="<b>Multiclass Classifier Decision Boundaries and Probability Maps on Iris Dataset</b><br>"
+               "<sup>Petal Length vs. Petal Width | Left & Right: Decision Regions (filled) with true labels | Middle: Per-class posterior probabilities</sup>",
+    title_x=0.5,
+    font=dict(family="Arial", size=14),
+    plot_bgcolor='white',
+    paper_bgcolor='white',
+    margin=dict(l=60, r=100, t=140, b=80)
+)
+
+# 统一坐标轴 & 网格
+for r in range(1,4):
+    for c in [1,5]:
+        fig.update_xaxes(title_text="Petal Length (cm)" if r==3 else "", row=r, col=c, showgrid=True, gridcolor='lightgray')
+        fig.update_yaxes(title_text="Petal Width (cm)" if c==1 else "", row=r, col=c, showgrid=True, gridcolor='lightgray')
+    for c in range(2,5):
+        fig.update_xaxes(showgrid=True, gridcolor='lightgray', zeroline=False, row=r, col=c)
+        fig.update_yaxes(showgrid=True, gridcolor='lightgray', zeroline=False, row=r, col=c)
+
+fig.write_html("task1.html")
+print("task1.html 已生成！")
